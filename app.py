@@ -9,13 +9,25 @@ from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from htmlTemplates import css, bot_template, user_template
 from langchain.llms import HuggingFaceHub
-
+import openai
 import lancedb
 import streamlit as st
 from langchain.document_loaders import PyPDFLoader, DirectoryLoader
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.llms import CTransformers
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.vectorstores import LanceDB
+import os
+import lancedb
+import re
+import pickle
+import requests
+import zipfile
+from pathlib import Path
+import lancedb as db
+from langchain.document_loaders import UnstructuredHTMLLoader
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.llms import OpenAI
 
 
 
@@ -28,38 +40,18 @@ def get_pdf_text(pdf_docs):
     return text
 
 
-def get_text_chunks(text):
-    text_splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len
-    )
-    chunks = text_splitter.split_text(text)
-    return chunks
-
-
-#working fine with faiss
-#def get_vectorstore(text_chunks):
-
-    
-    #embeddings = OpenAIEmbeddings()
-    #create embeddings
-    # embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2",
-    #                                model_kwargs={'device':"cpu"})
-    # #embeddings = HuggingFaceInstructEmbeddings(model_name="hkunlp/instructor-xl")
-    # vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
-    # return vectorstore
-
-
+# # Function to split text into chunks working with faisss
+# def get_text_chunks(documents):
+#     text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+#     chunks = text_splitter.create_documents(documents)
+#     return chunks
  
-def load_vectorstore():
-    pass
-    # DB_FAISS_PATH = 'faiss'
-    # embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2",
-    #                                model_kwargs={'device':"cpu"})
-    # vectorstore = FAISS.load_local(DB_FAISS_PATH, embeddings)
-    # return vectorstore
+# Function to split text into chunks
+def get_text_chunks(documents):
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50, length_function = len)
+    chunks = text_splitter.create_documents([documents])
+    return chunks
+ 
 
 
 
@@ -71,33 +63,19 @@ def get_vectorstore(text_chunks):
     embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2',
                                        model_kwargs={'device': 'cpu'})
 
-
-    DB_DIRECTORY ='lancedb_embedd'
-    db = lancedb.connect(DB_DIRECTORY)  # Use the specified directory
-    table = db.create_table(
-        "my_table",
-        data=[
-            {
-                "vector": embeddings.embed_query("Hello World"),
-                "text": "Hello World",
-                "id": "1",
-            }
-        ],
-        mode="overwrite",
-    )
-
-    # Create a LanceDB instance from documents and embeddings
+    db = lancedb.connect('/tmp/lancedb')
+    table = db.create_table("pdf_search", data=[
+        {"vector": embeddings.embed_query("Hello World"), "text": "Hello World", "id": "1"}
+    ], mode="overwrite")
     vectorstore = LanceDB.from_documents(text_chunks, embeddings, connection=table)
-
     return vectorstore
 
+
 def get_conversation_chain(vectorstore):
-    #llm = ChatOpenAI()
-    # llm = HuggingFaceHub(repo_id="google/flan-t5-xxl", model_kwargs={"temperature":0.5, "max_length":512})
 
+    os.environ['OPENAI_API_KEY'] = 'openai_apxbicagdsashbdlshd i_key'
 
-    llm = CTransformers(model="llama-2-7b-chat.ggmlv3.q8_0.bin",model_type="llama",
-                    config={'max_new_tokens':128,'temperature':0.01})
+    llm=OpenAI(openai_api_key=os.environ['OPENAI_API_KEY'])
 
     memory = ConversationBufferMemory(
         memory_key='chat_history', return_messages=True)
